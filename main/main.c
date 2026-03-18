@@ -17,6 +17,15 @@
 #define BTN_Y 140
 #define BTN_H 60
 
+// Centro do golfinho
+#define CX (IMG_X + 25)
+#define CY (IMG_Y + 32)
+#define RADIUS 40
+
+// 8 posições da seta ao redor do golfinho
+const int arrow_dx[8] = { 0,  28,  40,  28,   0, -28, -40, -28};
+const int arrow_dy[8] = {-40, -28,   0,  28,  40,  28,   0, -28};
+
 void motor_init() {
     gpio_init(MOTOR_IN1); gpio_set_dir(MOTOR_IN1, GPIO_OUT);
     gpio_init(MOTOR_IN2); gpio_set_dir(MOTOR_IN2, GPIO_OUT);
@@ -49,6 +58,18 @@ void draw_dolphin(uint16_t color) {
     gfx_drawBitmap(IMG_X, IMG_Y, image_NFC_dolphin_emulation_bits, 51, 64, color);
 }
 
+void clear_arrow(int pos) {
+    int x = CX + arrow_dx[pos] - 5;
+    int y = CY + arrow_dy[pos] - 5;
+    gfx_fillRect(x, y, 10, 10, 0x0000);
+}
+
+void draw_arrow(int pos, uint16_t color) {
+    int x = CX + arrow_dx[pos];
+    int y = CY + arrow_dy[pos];
+    gfx_fillRect(x - 4, y - 4, 8, 8, color);
+}
+
 int main(void) {
     stdio_init_all();
     motor_init();
@@ -59,10 +80,8 @@ int main(void) {
     gfx_clear();
     configure_touch();
 
-    // Golfinho branco no centro
     draw_dolphin(0xFFFF);
 
-    // Botões embaixo
     GFX_Button btn_cw  = {10,  BTN_Y, 140, BTN_H};
     GFX_Button btn_ccw = {170, BTN_Y, 140, BTN_H};
 
@@ -76,7 +95,9 @@ int main(void) {
 
     int px, py;
     int state = 0;
-    int last_state = 99;
+    int last_state = 0;
+    int arrow_pos = 0;
+    int anim_tick = 0;
 
     while (true) {
         if (readPoint(&px, &py)) {
@@ -88,16 +109,32 @@ int main(void) {
             state = 0;
         }
 
-        if (state != last_state) {
-            gfx_fillRect(IMG_X, IMG_Y, 51, 64, 0x0000);
-            if (state == 1)       draw_dolphin(0x001F); // azul
-            else if (state == -1) draw_dolphin(0x07E0); // verde
-            else                  draw_dolphin(0xFFFF); // branco
-            last_state = state;
+        // Limpa seta quando para
+        if (state == 0 && last_state != 0) {
+            clear_arrow(arrow_pos);
+            draw_dolphin(0xFFFF);
         }
 
-        if (state == 1)       motor_step_ccw();
-        else if (state == -1) motor_step_cw();
-        else                  motor_stop();
+        if (state == 1) {
+            motor_step_ccw();
+            anim_tick++;
+            if (anim_tick % 8 == 0) {
+                clear_arrow(arrow_pos);
+                arrow_pos = (arrow_pos + 1) % 8;
+                draw_arrow(arrow_pos, 0x001F); // azul girando CW
+            }
+        } else if (state == -1) {
+            motor_step_cw();
+            anim_tick++;
+            if (anim_tick % 8 == 0) {
+                clear_arrow(arrow_pos);
+                arrow_pos = (arrow_pos + 7) % 8; // sentido contrário
+                draw_arrow(arrow_pos, 0x07E0); // verde girando CCW
+            }
+        } else {
+            motor_stop();
+        }
+
+        last_state = state;
     }
 }
